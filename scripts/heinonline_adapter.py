@@ -23,19 +23,17 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 
-HEINONLINE_ENTRY = "https://libvpn.gdufs.edu.cn/-https://heinonline.org/HOL/Welcome"
-SEARCH_INPUT = '#full_text_terms, input[name="terms"]'
-SEARCH_SUBMIT = '#sendit_full_text, button[type="submit"]'
-SEARCH_RESULT_URL = "LuceneSearch"
 SEARCH_RESULT_TEXT = r"results searching for|Databases found|result"
 ADVANCED_RESULT_TEXT = r"results searching for|Databases found"
 DOWNLOAD_HELPER = "headless_download.mjs"
 FETCH_HELPER = "headless_fetch.mjs"
 SECTION_DOWNLOAD_LABEL = "Download PDF of This Section"
+SEARCH_URL = "https://access.heinonline.com/HOL/LuceneSearch"
 ADVANCED_SEARCH_URL = "https://access.heinonline.com/HOL/LuceneSearch"
 ADVANCED_FIELD_TYPES = ("title", "voltitle", "creator", "text")
 ADVANCED_JOINS = ("AND", "OR", "NOT")
 ADVANCED_MAX_FIELDS = 6
+RESULT_PAGE_SIZES = (10, 20, 25, 50, 75, 100)
 LIBVPN_ENTRY_PREFIX = "https://libvpn.gdufs.edu.cn/-https://"
 
 
@@ -176,11 +174,25 @@ def _summary_index(
     return mapping
 
 
-def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
+def _result_page_size(limit: int) -> int:
+    """Return the smallest HeinOnline page size that can satisfy ``limit``."""
+    for size in RESULT_PAGE_SIZES:
+        if size >= limit:
+            return size
+    return RESULT_PAGE_SIZES[-1]
+
+
+def _parse_results(page_html: str, limit: int, offset: int = 0) -> dict[str, Any]:
     soup = BeautifulSoup(page_html, "html.parser")
     body_text = soup.get_text(" ", strip=True)
     total = None
     match = re.search(r"([\d,]+)\s+results searching for", body_text, re.I)
+    if not match:
+        match = re.search(
+            r"Results\s+\d+-\d+\s+of\s+([\d,]+)\s+items searching for",
+            body_text,
+            re.I,
+        )
     if not match:
         match = re.search(r"([\d,]+)\s+Databases found", body_text, re.I)
     if match:
@@ -261,17 +273,16 @@ def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
             }
         )
 
-    selected = results[offset : offset + limit]
+    selected = results[:limit]
     warnings = []
-    if offset and offset >= len(results):
+    if not results and total is not None and offset >= total:
         warnings.append(
-            "HeinOnline adapter currently reads only the first result page; "
-            "offset pagination is not implemented."
+            f"HeinOnline returned no results at offset {offset}; total={total}."
         )
     if limit > len(results):
         warnings.append(
-            "HeinOnline adapter returned the first search-result page only "
-            f"({len(results)} records); requested limit={limit}."
+            "HeinOnline result page returned "
+            f"{len(results)} records at offset {offset}; requested limit={limit}."
         )
     return {
         "total": total,
@@ -279,6 +290,66 @@ def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
         "warnings": warnings,
         "page_result_count": len(results),
     }
+
+
+def _pagination_report(
+    parsed: dict[str, Any],
+    *,
+    offset: int,
+    limit: int,
+    page_size: int,
+) -> dict[str, Any]:
+    returned = len(parsed["results"])
+    total = parsed["total"]
+    next_offset = offset + returned if returned else None
+    if next_offset is not None and total is not None and next_offset >= total:
+        next_offset = None
+    return {
+        "offset": offset,
+        "limit": limit,
+        "page_size": page_size,
+        "returned": returned,
+        "page_result_count": parsed["page_result_count"],
+        "total": total,
+        "next_offset": next_offset,
+        "firstdoc": offset,
+        "maxresults": page_size,
+        "infinite_scroll": False,
+        "note": (
+            "HeinOnline non-scrolling result page requested with "
+            f"firstdoc={offset} and maxresults={page_size}; next_offset is a "
+            "result offset, not a page number."
+        ),
+    }
+
+
+def build_search_url(
+    query: str,
+    *,
+    collection: str = "all",
+    firstdoc: int = 0,
+    maxresults: int = 10,
+) -> str:
+    """Build the single-box result URL used by the search command.
+
+    HeinOnline's welcome-page search box submits these parameters.  The
+    adapter explicitly turns off infinite scroll so ``firstdoc`` can select a
+    stable result window and ``maxresults`` can return up to 100 records.
+    """
+    pairs = [
+        ("terms", query),
+        ("collection", collection or "all"),
+        ("searchtype", "advanced"),
+        ("typea", "text"),
+        ("tabfrom", ""),
+        ("submit", "Go"),
+        ("sendit", ""),
+        ("all", "true"),
+        ("maxresults", str(maxresults)),
+        ("firstdoc", str(max(0, firstdoc))),
+        ("infinite_scroll", "off"),
+    ]
+    return SEARCH_URL + "?" + urlencode(pairs)
 
 
 def search(
@@ -299,7 +370,7 @@ def search(
         "status": "unavailable",
         "scope": (
             "HeinOnline All Databases search through the GDUFS library session; "
-            "first result page with title, journal, author, citation, subjects "
+            "paginated results with title, journal, author, citation, subjects "
             "and summary."
         ),
         "results": [],
@@ -328,6 +399,14 @@ def search(
                 "Session is not valid: " + json.dumps(ensure, ensure_ascii=False)
             )
 
+        page_size = _result_page_size(limit)
+        target = build_search_url(
+            query,
+            firstdoc=offset,
+            maxresults=page_size,
+        )
+        report["requested_url"] = target
+
         node = shutil.which("node")
         if not node:
             raise RuntimeError("Node.js is required for the headless browser helper.")
@@ -346,27 +425,17 @@ def search(
                 "--cookies",
                 str(cookies_path),
                 "--url",
-                HEINONLINE_ENTRY,
+                _libvpn_entry_url(target),
                 "--out",
                 str(rendered_path),
                 "--wait-ms",
                 "15000",
-                "--search-term",
-                query,
-                "--search-input",
-                SEARCH_INPUT,
-                "--search-submit",
-                SEARCH_SUBMIT,
-                "--search-ready",
-                SEARCH_INPUT,
-                "--result-url-contains",
-                SEARCH_RESULT_URL,
                 "--result-text",
                 SEARCH_RESULT_TEXT,
                 "--result-selector",
                 "div.lucene_search_result_number_b",
                 "--result-min-count",
-                str(min(limit, 10)),
+                str(limit),
             ]
             if chrome_path:
                 command += ["--chrome", chrome_path]
@@ -388,17 +457,12 @@ def search(
                 "results": parsed["results"],
                 "warnings": parsed["warnings"],
                 "query_echo": query_echo(page_html),
-                "pagination": {
-                    "offset": offset,
-                    "limit": limit,
-                    "returned": len(parsed["results"]),
-                    "total": parsed["total"],
-                    "next_offset": None,
-                    "note": (
-                        "HeinOnline adapter currently returns the first "
-                        "search-result page; deeper pagination is not implemented."
-                    ),
-                },
+                "pagination": _pagination_report(
+                    parsed,
+                    offset=offset,
+                    limit=limit,
+                    page_size=page_size,
+                ),
             }
         )
     except Exception as exc:
@@ -442,6 +506,9 @@ def build_advanced_url(
     year_lo: str = "",
     year_hi: str = "",
     collection: str = "all",
+    firstdoc: int = 0,
+    maxresults: int = 10,
+    infinite_scroll: bool = False,
 ) -> str:
     """Build the HeinOnline multi-field advanced-search URL.
 
@@ -469,8 +536,12 @@ def build_advanced_url(
         ("yearhi", str(year_hi or "")),
         ("searchtype", "field"),
         ("collection", collection or "all"),
+        ("maxresults", str(maxresults)),
+        ("firstdoc", str(max(0, firstdoc))),
         ("submit", "Go"),
     ]
+    if not infinite_scroll:
+        pairs.append(("infinite_scroll", "off"))
     return ADVANCED_SEARCH_URL + "?" + urlencode(pairs)
 
 
@@ -502,7 +573,7 @@ def search_advanced(
     chrome_path: str | None = None,
     timeout: int = 240,
 ) -> dict[str, Any]:
-    """Run a HeinOnline multi-field advanced search (first result page).
+    """Run a HeinOnline multi-field advanced search.
 
     Combines Section Title / Book Title / Author / Full Text rows with
     AND/OR/NOT operators and an optional year range.  Uses the same browser
@@ -516,9 +587,9 @@ def search_advanced(
         "scope": (
             "HeinOnline multi-field advanced search (Section Title, Book "
             "Title, Author, Full Text with AND/OR/NOT between rows and an "
-            "optional year range) through the GDUFS library session; first "
-            "result page with title, journal, author, citation, subjects and "
-            "summary."
+            "optional year range) through the GDUFS library session; "
+            "paginated results with title, journal, author, citation, "
+            "subjects and summary."
         ),
         "results": [],
         "warnings": [],
@@ -530,8 +601,15 @@ def search_advanced(
         )
         return report
     try:
+        page_size = _result_page_size(limit)
         target = build_advanced_url(
-            fields, year_lo=year_lo, year_hi=year_hi, collection=collection
+            fields,
+            year_lo=year_lo,
+            year_hi=year_hi,
+            collection=collection,
+            firstdoc=offset,
+            maxresults=page_size,
+            infinite_scroll=False,
         )
     except ValueError as exc:
         report["warnings"].append(str(exc))
@@ -579,7 +657,7 @@ def search_advanced(
                 "--result-selector",
                 "div.lucene_search_result_number_b",
                 "--result-min-count",
-                str(min(limit, 10)),
+                str(limit),
             ]
             if chrome_path:
                 command += ["--chrome", chrome_path]
@@ -597,7 +675,11 @@ def search_advanced(
 
         if parsed["results"]:
             status = "ok"
-        elif parsed["total"] is not None or "results searching for" in page_html:
+        elif (
+            parsed["total"] is not None
+            or "results searching for" in page_html
+            or "items searching for" in page_html
+        ):
             status = "no-results-in-queried-index"
         else:
             status = "unexpected-page"
@@ -613,17 +695,12 @@ def search_advanced(
                 "results": parsed["results"],
                 "warnings": report["warnings"] + parsed["warnings"],
                 "query_echo": query_echo(page_html),
-                "pagination": {
-                    "offset": offset,
-                    "limit": limit,
-                    "returned": len(parsed["results"]),
-                    "total": parsed["total"],
-                    "next_offset": None,
-                    "note": (
-                        "HeinOnline adapter currently returns the first "
-                        "search-result page; deeper pagination is not implemented."
-                    ),
-                },
+                "pagination": _pagination_report(
+                    parsed,
+                    offset=offset,
+                    limit=limit,
+                    page_size=page_size,
+                ),
             }
         )
     except Exception as exc:

@@ -101,6 +101,9 @@ $hein = "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher\run.ps1"
 # 单框检索：HeinOnline 原生 Search Help 语法
 & $hein search 'command responsibility NOT Bemba' --limit 5 --out './hein-search.json'
 
+# 从第 11 条开始取 20 条
+& $hein search 'command responsibility NOT Bemba' --offset 10 --limit 20 --out './hein-search-11-30.json'
+
 # 多字段高级检索：Section Title / Book Title / Author / Full Text + 年份范围
 & $hein advanced --field 'title=command responsibility' --field 'text=Article 28' --join AND --year-lo 2005 --year-hi 2015 --limit 5 --out './hein-advanced.json'
 
@@ -108,7 +111,7 @@ $hein = "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher\run.ps1"
 & $hein download '<HeinOnline 结果 URL>' --pdf-out './section.pdf' --out './section.json'
 ```
 
-不加 `--out` 时报告直接打印到标准输出。`--limit` 取 1..50，`--timeout` 取 1..1800 秒，`download --wait-ms` 取 0..120000。
+不加 `--out` 时报告直接打印到标准输出。`--limit` 取 1..50，`--offset` 是零基结果位置（`10` 表示从第 11 条开始），`--timeout` 取 1..1800 秒，`download --wait-ms` 取 0..120000。检索命令会关闭 HeinOnline 无限滚动，用 `firstdoc` 和 `maxresults` 请求稳定的结果窗口。
 
 检索结果的 `query_echo` 字段显示 HeinOnline 实际解释的检索式，是核对布尔运算符、通配符和邻近检索是否生效的直接依据。语法表与实测数字见 [references/heinonline-search.md](references/heinonline-search.md)。
 

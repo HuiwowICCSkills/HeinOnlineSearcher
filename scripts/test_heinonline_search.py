@@ -68,7 +68,7 @@ RESULT_PAGE = """
 
 class ParseResultsTests(unittest.TestCase):
     def test_parses_total_titles_authors_and_subjects(self):
-        parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
+        parsed = adapter._parse_results(RESULT_PAGE, limit=5)
         self.assertEqual(parsed["total"], 1234)
         self.assertEqual(len(parsed["results"]), 3)
         first = parsed["results"][0]
@@ -81,33 +81,64 @@ class ParseResultsTests(unittest.TestCase):
         self.assertEqual(first["via"], "heinonline")
 
     def test_summaries_stay_with_their_own_result(self):
-        parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
+        parsed = adapter._parse_results(RESULT_PAGE, limit=5)
         self.assertEqual(
             [item["summary"] for item in parsed["results"]],
             ["Summary one.", "", "Summary three."],
         )
 
     def test_limit_truncates_the_first_page(self):
-        parsed = adapter._parse_results(RESULT_PAGE, limit=1, offset=0)
+        parsed = adapter._parse_results(RESULT_PAGE, limit=1)
         self.assertEqual(len(parsed["results"]), 1)
 
     def test_limit_above_the_page_size_warns(self):
-        parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
+        parsed = adapter._parse_results(RESULT_PAGE, limit=5)
         self.assertEqual(len(parsed["results"]), 3)
-        self.assertTrue(any("first search-result page only" in w for w in parsed["warnings"]))
+        self.assertTrue(any("requested limit=5" in w for w in parsed["warnings"]))
 
-    def test_offset_beyond_first_page_warns(self):
+    def test_offset_does_not_reslice_an_already_positioned_page(self):
         parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=10)
-        self.assertEqual(parsed["results"], [])
-        self.assertTrue(any("offset pagination is not implemented" in w for w in parsed["warnings"]))
+        self.assertEqual(len(parsed["results"]), 3)
 
     def test_empty_page_reports_no_total(self):
-        parsed = adapter._parse_results("<html><body>Nothing here</body></html>", limit=5, offset=0)
+        parsed = adapter._parse_results("<html><body>Nothing here</body></html>", limit=5)
         self.assertIsNone(parsed["total"])
         self.assertEqual(parsed["results"], [])
 
+    def test_result_page_size_uses_supported_heinonline_sizes(self):
+        self.assertEqual(adapter._result_page_size(1), 10)
+        self.assertEqual(adapter._result_page_size(20), 20)
+        self.assertEqual(adapter._result_page_size(21), 25)
+        self.assertEqual(adapter._result_page_size(50), 50)
+
+    def test_pagination_report_exposes_the_next_result_offset(self):
+        parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=10)
+        report = adapter._pagination_report(
+            parsed,
+            offset=10,
+            limit=5,
+            page_size=10,
+        )
+        self.assertEqual(report["firstdoc"], 10)
+        self.assertEqual(report["returned"], 3)
+        self.assertEqual(report["next_offset"], 13)
+        self.assertFalse(report["infinite_scroll"])
+
 
 class UrlTests(unittest.TestCase):
+    def test_build_search_url_includes_pagination(self):
+        url = adapter.build_search_url(
+            "command responsibility",
+            firstdoc=10,
+            maxresults=20,
+        )
+        self.assertTrue(url.startswith("https://access.heinonline.com/HOL/LuceneSearch?"))
+        self.assertIn("terms=command+responsibility", url)
+        self.assertIn("typea=text", url)
+        self.assertIn("maxresults=20", url)
+        self.assertIn("firstdoc=10", url)
+        self.assertIn("infinite_scroll=off", url)
+
     def test_build_advanced_url_encodes_fields_operators_and_years(self):
         url = adapter.build_advanced_url(
             [
@@ -116,6 +147,8 @@ class UrlTests(unittest.TestCase):
             ],
             year_lo="2005",
             year_hi="2015",
+            firstdoc=10,
+            maxresults=20,
         )
         self.assertTrue(url.startswith("https://access.heinonline.com/HOL/LuceneSearch?"))
         self.assertIn("termsa=command+responsibility", url)
@@ -126,6 +159,9 @@ class UrlTests(unittest.TestCase):
         self.assertIn("yearlo=2005", url)
         self.assertIn("yearhi=2015", url)
         self.assertIn("searchtype=field", url)
+        self.assertIn("firstdoc=10", url)
+        self.assertIn("maxresults=20", url)
+        self.assertIn("infinite_scroll=off", url)
         self.assertIn("submit=Go", url)
 
     def test_build_advanced_url_rejects_bad_rows(self):

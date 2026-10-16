@@ -73,9 +73,9 @@ Documented caveats:
 
 `build_advanced_url()` turns up to six `{field, terms, join}` rows into the GET
 URL; `search_advanced()` renders it through the same browser session and parses
-the first result page. Report fields: `mode: "advanced"`, `requested_url`,
-`query_echo` (the query as HeinOnline interpreted it), `total`, `results`,
-`warnings`, `pagination`.
+the requested result window. Report fields: `mode: "advanced"`,
+`requested_url`, `query_echo` (the query as HeinOnline interpreted it), `total`,
+`results`, `warnings`, `pagination`.
 
 Between-field operators supported by the adapter: `AND`, `OR`, `NOT`. The form
 additionally offers Within 5/10/25, but on 2026-10-16 both direct-URL encodings
@@ -86,10 +86,30 @@ expose it. For proximity, combine both terms inside one field and use `w/N` or
 
 ### Manual URL shape
 
-    https://access.heinonline.com/HOL/LuceneSearch?termsa=...&typea=title&operator=AND&termsb=...&typeb=text&yearlo=&yearhi=&searchtype=field&collection=all&submit=Go
+    https://access.heinonline.com/HOL/LuceneSearch?termsa=...&typea=title&operator=AND&termsb=...&typeb=text&yearlo=&yearhi=&searchtype=field&collection=all&maxresults=20&firstdoc=10&infinite_scroll=off&submit=Go
 
 Through LibVPN, render the entry form instead:
 `https://libvpn.gdufs.edu.cn/-https://access.heinonline.com/HOL/LuceneSearch?...`.
+
+### Pagination
+
+HeinOnline enables infinite scroll by default. The adapter switches to the
+standard pager with `infinite_scroll=off`, then controls the window with:
+
+- `firstdoc`: zero-based result offset (`10` starts at result 11);
+- `maxresults`: page size, using HeinOnline's supported values
+  `10`, `20`, `25`, `50`, `75`, `100`.
+
+For the search command, `--offset` maps to `firstdoc` and the smallest supported
+`maxresults` value that can cover `--limit`. For example:
+
+```powershell
+& '<skill-dir>/run.ps1' search 'command responsibility NOT Bemba' --offset 10 --limit 20
+```
+
+returns results 11-30. The `pagination.next_offset` field is the next result
+offset; it is `null` when the returned window reaches the total or no more rows
+were returned.
 
 ## Live verification (2026-10-16, All Databases, GDUFS session)
 
@@ -110,12 +130,21 @@ Counts are one-day snapshots and change as content grows; the point is that each
 operator visibly redefined the result set. `query_echo` in adapter reports is
 the way to confirm how a query was interpreted.
 
+Pagination was verified separately on 2026-10-16 with
+`"identification of customary international law"`:
+
+| Request | Result-page echo | Returned |
+| --- | --- | --- |
+| `firstdoc=0&maxresults=10&infinite_scroll=off` | `Results 1-10 of 1,323` | 10 |
+| `firstdoc=10&maxresults=10&infinite_scroll=off` | `Results 11-20 of 1,323` | 10 |
+| `firstdoc=0&maxresults=50&infinite_scroll=off` | `Results 1-50 of 1,323` | 50 |
+
 ## Boundaries
 
 - All Databases scope (`collection=all`). The database-selection modal carries
   its own `face_quers` parameters; its exact request form was not verified.
-- The adapter returns the first result page only; deeper pagination is not
-  implemented.
+- The CLI caps `--limit` at 50 even though HeinOnline's pager offers 75 and 100;
+  raise that bound only after a live large-page check.
 - Search rows are metadata and summaries, not full text; full text remains a
   separate `download` step.
 - Range queries, fuzzy, boost, `atleast` and field grouping are documented by

@@ -13,8 +13,9 @@ delegated to the separate ``gdufs-auth-session`` skill: install it as a
 sibling skill, or point ``--auth-skill`` / ``GDUFS_AUTH_SKILL`` at it.
 
 Boundaries: search results are HeinOnline metadata and summaries, not full
-text; the adapter reads the first result page only; ``download`` writes the
-PDF and reports bytes/SHA-256 without extracting text.
+text; search and advanced support result offsets through HeinOnline's
+non-scrolling result pages; ``download`` writes the PDF and reports
+bytes/SHA-256 without extracting text.
 """
 
 from __future__ import annotations
@@ -291,7 +292,12 @@ def build_parser() -> argparse.ArgumentParser:
     search = sub.add_parser("search", help="Single-box HeinOnline search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=5)
-    search.add_argument("--offset", type=int, default=0)
+    search.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Zero-based result offset (for example 10 starts at result 11)",
+    )
     search.add_argument("--timeout", type=int, default=240)
     _add_auth_options(search)
     _add_output_option(search)
@@ -308,7 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
     advanced.add_argument("--year-hi", default="")
     advanced.add_argument("--collection", default="all")
     advanced.add_argument("--limit", type=int, default=5)
-    advanced.add_argument("--offset", type=int, default=0)
+    advanced.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Zero-based result offset (for example 10 starts at result 11)",
+    )
     advanced.add_argument("--timeout", type=int, default=240)
     _add_auth_options(advanced)
     _add_output_option(advanced)
