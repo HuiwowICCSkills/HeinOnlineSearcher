@@ -41,10 +41,10 @@
 Codex 用户 `<skills-root>` 通常是 `%USERPROFILE%\.codex\skills`（macOS/Linux 为 `~/.codex/skills`）。
 
 ```powershell
-# 公共仓库本身
+# HeinOnlineSearcher 仓库（若为私有，用有权限的账号克隆）
 git clone https://github.com/GDUFSICCSkills/HeinOnlineSearcher.git "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher"
 
-# 私有仓库：先确认当前账号有访问权限
+# gdufs-auth-session 是私有仓库：先确认当前账号已有访问权限
 git clone https://github.com/GDUFSICCSkills/gdufs-auth-session.git "$env:USERPROFILE\.codex\skills\gdufs-auth-session"
 ```
 
