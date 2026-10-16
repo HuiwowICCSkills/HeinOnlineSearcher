@@ -365,6 +365,8 @@ def search(
                 SEARCH_RESULT_TEXT,
                 "--result-selector",
                 "div.lucene_search_result_number_b",
+                "--result-min-count",
+                str(min(limit, 10)),
             ]
             if chrome_path:
                 command += ["--chrome", chrome_path]
@@ -574,6 +576,10 @@ def search_advanced(
                 "15000",
                 "--result-text",
                 ADVANCED_RESULT_TEXT,
+                "--result-selector",
+                "div.lucene_search_result_number_b",
+                "--result-min-count",
+                str(min(limit, 10)),
             ]
             if chrome_path:
                 command += ["--chrome", chrome_path]
