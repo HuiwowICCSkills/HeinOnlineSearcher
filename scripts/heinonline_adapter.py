@@ -151,6 +151,31 @@ def set_browser_preference(
     return _run_auth(skill, *args)
 
 
+def _summary_index(
+    soup: BeautifulSoup, containers: list[Any]
+) -> dict[int, Any]:
+    """Map each result index to the HeinOnline summary that belongs to it.
+
+    HeinOnline pools every result row into one shared ``div.row.g-0`` and
+    emits the generated summaries as sibling blocks in document order, between
+    the row they describe and the next one.  Results without a summary leave
+    no placeholder, so the summary blocks cannot be zipped with the result
+    list; each summary is paired with the nearest preceding result instead.
+    """
+    index_of = {id(node): index for index, node in enumerate(containers)}
+    mapping: dict[int, Any] = {}
+    last_result: int | None = None
+    for element in soup.find_all(True):
+        position = index_of.get(id(element))
+        if position is not None:
+            last_result = position
+            continue
+        if "full_summary_text" in (element.get("class") or []):
+            if last_result is not None:
+                mapping[last_result] = element
+    return mapping
+
+
 def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
     soup = BeautifulSoup(page_html, "html.parser")
     body_text = soup.get_text(" ", strip=True)
@@ -164,7 +189,7 @@ def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
     containers = soup.select(
         "div.lucene_search_result_number_b"
     )
-    summary_spans = soup.select("span.full_summary_text")
+    summary_by_result = _summary_index(soup, containers)
     results: list[dict[str, Any]] = []
     for index, node in enumerate(containers):
         container = node.parent
@@ -180,11 +205,7 @@ def _parse_results(page_html: str, limit: int, offset: int) -> dict[str, Any]:
             text = " ".join(line.get_text(" ", strip=True).split())
             if text and text not in lines and text != title:
                 lines.append(text)
-        # HeinOnline renders the result rows and summaries as sibling blocks
-        # inside one shared row.g-0, so associate summaries by result order.
-        summary_node = (
-            summary_spans[index] if index < len(summary_spans) else None
-        )
+        summary_node = summary_by_result.get(index)
         summary = (
             " ".join(summary_node.get_text(" ", strip=True).split())
             if summary_node

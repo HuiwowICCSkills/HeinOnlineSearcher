@@ -35,20 +35,33 @@ RESULT_PAGE = """
 <html><body>
 <div>1,234 results searching for (command responsibility) in All Databases.</div>
 <div class="row g-0">
-  <div class="lucene_search_result_number_b">1.</div>
-  <h2 class="search-result-heading"><a href="/HOL/Page?handle=h1&amp;div=1">Command Responsibility in Practice</a></h2>
-  <div class="search_result_line">Bemba, Jean-Pierre</div>
-  <div class="search_result_line">Journal of International Criminal Justice, Vol. 7, Issue 3, pp. 621-640 (2009)</div>
-  <div class="topics"><a>War crimes</a><a>Command responsibility</a></div>
+  <div class="section_type_article_b">
+    <div class="row">
+      <div class="lucene_search_result_number_b">1.</div>
+      <h2 class="search-result-heading"><a href="/HOL/Page?handle=h1&amp;div=1">Command Responsibility in Practice</a></h2>
+      <div class="search_result_line">Bemba, Jean-Pierre</div>
+      <div class="search_result_line">Journal of International Criminal Justice, Vol. 7, Issue 3, pp. 621-640 (2009)</div>
+      <div class="topics"><a>War crimes</a><a>Command responsibility</a></div>
+      <span class="full_summary_text">Summary one.</span>
+    </div>
+  </div>
+  <div class="section_type_notes_b">
+    <div class="row">
+      <div class="lucene_search_result_number_b">2.</div>
+      <h2 class="search-result-heading"><a href="/HOL/Page?handle=h2&amp;div=2">Superior Responsibility</a></h2>
+      <div class="search_result_line">Cited 12 times</div>
+      <div class="search_result_line">Some Journal, Vol. 1, Issue 2, pp. 1-20 (2001)</div>
+    </div>
+  </div>
+  <div class="section_type_article_b">
+    <div class="row">
+      <div class="lucene_search_result_number_b">3.</div>
+      <h2 class="search-result-heading"><a href="/HOL/Page?handle=h3&amp;div=3">Customary Law and the ICC</a></h2>
+      <div class="search_result_line">A, B</div>
+      <span class="full_summary_text">Summary three.</span>
+    </div>
+  </div>
 </div>
-<div class="row g-0">
-  <div class="lucene_search_result_number_b">2.</div>
-  <h2 class="search-result-heading"><a href="/HOL/Page?handle=h2&amp;div=2">Superior Responsibility</a></h2>
-  <div class="search_result_line">Cited 12 times</div>
-  <div class="search_result_line">Some Journal, Vol. 1, Issue 2, pp. 1-20 (2001)</div>
-</div>
-<span class="full_summary_text">Summary one.</span>
-<span class="full_summary_text">Summary two.</span>
 </body></html>
 """
 
@@ -57,7 +70,7 @@ class ParseResultsTests(unittest.TestCase):
     def test_parses_total_titles_authors_and_subjects(self):
         parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
         self.assertEqual(parsed["total"], 1234)
-        self.assertEqual(len(parsed["results"]), 2)
+        self.assertEqual(len(parsed["results"]), 3)
         first = parsed["results"][0]
         self.assertEqual(first["title"], "Command Responsibility in Practice")
         self.assertEqual(first["url"], "/HOL/Page?handle=h1&div=1")
@@ -67,13 +80,20 @@ class ParseResultsTests(unittest.TestCase):
         self.assertEqual(first["subjects"], ["War crimes", "Command responsibility"])
         self.assertEqual(first["via"], "heinonline")
 
+    def test_summaries_stay_with_their_own_result(self):
+        parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
+        self.assertEqual(
+            [item["summary"] for item in parsed["results"]],
+            ["Summary one.", "", "Summary three."],
+        )
+
     def test_limit_truncates_the_first_page(self):
         parsed = adapter._parse_results(RESULT_PAGE, limit=1, offset=0)
         self.assertEqual(len(parsed["results"]), 1)
 
     def test_limit_above_the_page_size_warns(self):
         parsed = adapter._parse_results(RESULT_PAGE, limit=5, offset=0)
-        self.assertEqual(len(parsed["results"]), 2)
+        self.assertEqual(len(parsed["results"]), 3)
         self.assertTrue(any("first search-result page only" in w for w in parsed["warnings"]))
 
     def test_offset_beyond_first_page_warns(self):
