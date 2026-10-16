@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Local run artefacts
+.heinonline-cache/
+output/
+*.local.json
+
+# Never commit credentials or session state
+config.json
+session.json
+cookies.json
+browser_sources.json
