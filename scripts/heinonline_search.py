@@ -256,7 +256,7 @@ def doctor(args: argparse.Namespace) -> dict[str, Any]:
         checks.append({"name": "auth_skill", "ok": False, "detail": str(exc)})
         next_steps.append(
             "Install gdufs-auth-session (private repo, request access from "
-            "the GDUFSICCSkills organisation) as a sibling skill or set "
+            "the HuiwowICCSkills organisation) as a sibling skill or set "
             "GDUFS_AUTH_SKILL."
         )
 
