@@ -41,7 +41,7 @@
 Codex 用户 `<skills-root>` 通常是 `%USERPROFILE%\.codex\skills`（macOS/Linux 为 `~/.codex/skills`）。
 
 ```powershell
-# HeinOnlineSearcher 仓库（若为私有，用有权限的账号克隆）
+# HeinOnlineSearcher 仓库（公开仓库）
 git clone https://github.com/HuiwowICCSkills/HeinOnlineSearcher.git "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher"
 
 # gdufs-auth-session 是公开仓库：先确认当前账号已有访问权限
