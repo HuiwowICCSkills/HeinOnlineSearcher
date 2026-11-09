@@ -143,3 +143,28 @@ git -C "$env:USERPROFILE\.codex\skills\gdufs-auth-session" pull
 ```
 
 两个仓库独立发版：HeinOnlineSearcher 只依赖 gdufs-auth-session 的公开命令面（`ensure`、`cookies`、`status`、`run.ps1`、`scripts/headless_fetch.mjs`、`scripts/headless_download.mjs`）。升级其中一个前，先确认另一个的对应命令仍存在。
+
+## 实测效果（2026-11-09）
+
+以下命令与结果来自本机 `~/.codex/skills/HeinOnlineSearcher` 的实网运行；检索日期 2026-11-09（Asia/Shanghai），输出为该次运行实际返回的 JSON 报告。机构会话由 `gdufs-auth-session` 提供，未登录或会话过期时检索不可用。
+
+```powershell
+& "$env:USERPROFILE\.codex\skills\gdufs-auth-session\run.ps1" ensure --config "$env:USERPROFILE\.gdufs-auth\config.json"
+$hein = "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher\run.ps1"
+& $hein search 'command responsibility' --limit 5
+```
+
+- 状态：`ok`；服务端报告 `total = 337430`（All Databases 全库命中）；本次返回 5 条（`pagination.page_result_count = 9`）。
+- `query_echo = "(command responsibility)"`：HeinOnline 实际执行的检索式，可与输入对照确认布尔词、通配符是否生效。
+- `scope` 原文：`HeinOnline All Databases search through the GDUFS library session; paginated results with title, journal, author, citation, subjects and summary.`
+- 代表性结果：
+
+| 题名 | 类型 | 期刊 / 引证 | 作者 | 链接 |
+| --- | --- | --- | --- | --- |
+| Command Responsibility [article] | search_result | United States Air Force Academy Journal of Legal Studies , Vol. 8, pp. 1-18；8 U.S. A.F. Acad. J. Legal Stud. 1 (1997-1998) | Levie, Howard S. (Cited 249 times) | https://libvpn.gdufs.edu.cn/HOL/Page?public=true&handle=hein.journals/usafa8&div=5&start_page=1&collection=journals&set_as_cursor=0&men_tab=srchresults&__proto__=https&__host__=access.heinonline.com |
+| Command Responsibility [reviews] | search_result | LAW - Theory and Practice , Vol. 38, Issue 1 (2021), pp. 70-96；DOI: 10.5937/ptp2101070D | Dinic, Slavica S. ; Turkovic, Emil M. | https://libvpn.gdufs.edu.cn/HOL/Page?public=true&handle=hein.journals/ltyape38&div=10&start_page=70&collection=journals&set_as_cursor=1&men_tab=srchresults&__proto__=https&__host__=access.heinonline.com |
+| Command Responsibility [article] | search_result | Croatian Annual of Criminal Law and Practice , Vol. 8, Issue 2 (2001), pp. 139-146；8 Croatian Ann. Crim. L. & Prac. 139 (2001) | Bacic, Franjo | https://libvpn.gdufs.edu.cn/HOL/Page?public=true&handle=hein.journals/cranmscip8&div=50&start_page=139&collection=journals&set_as_cursor=2&men_tab=srchresults&__proto__=https&__host__=access.heinonline.com |
+| Command Responsibility [notes] | search_result | Military Law and Law of War Review , Vol. 41, Issues 3 and 4 (2002), pp. 193-214；41 Mil. L. & L. War Rev. 193 (2002) | Keijzer, Nico (Cited 2 times) | https://libvpn.gdufs.edu.cn/HOL/Page?public=true&handle=hein.journals/mllwr41&div=24&start_page=193&collection=journals&set_as_cursor=3&men_tab=srchresults&__proto__=https&__host__=access.heinonline.com |
+| Command Responsibility [notes] | search_result | Military Law and Law of War Review , Vol. 41, Issues 3 and 4 (2002), pp. 215-226；41 Mil. L. & L. War Rev. 215 (2002) | Dahl, Arne Willy (Cited 4 times) | https://libvpn.gdufs.edu.cn/HOL/Page?public=true&handle=hein.journals/mllwr41&div=25&start_page=215&collection=journals&set_as_cursor=4&men_tab=srchresults&__proto__=https&__host__=access.heinonline.com |
+
+> 说明：以上是**元数据与检索摘要**，不是全文。每条 `access` 均为 `HeinOnline institutional search metadata and summary; full text not fetched by this adapter`，本次 `summary` 字段为空，因此不得据题名或引证补写裁判/论证内容。`total=337430` 是 All Databases（跨全部文库）的服务端命中数，不等于可引用的独立文献数；引用前须用 `download` 落盘分节 PDF 或打开 HeinOnline 页面核对正文、页码与引证头。链接走 GDUFS 代理域（`libvpn.gdufs.edu.cn`），需机构会话才可打开。
