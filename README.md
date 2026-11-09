@@ -1,6 +1,6 @@
 # HeinOnlineSearcher 部署指引
 
-独立的 HeinOnline 检索 skill：单框检索、多字段高级检索、分节 PDF 下载。机构访问不内置在本仓库，而是复用同组织的私有 skill [gdufs-auth-session](https://github.com/HuiwowICCSkills/gdufs-auth-session)；本 skill 不保存凭据，也不写会话文件。
+独立的 HeinOnline 检索 skill：单框检索、多字段高级检索、分节 PDF 下载。机构访问不内置在本仓库，而是复用同组织的公开 skill [gdufs-auth-session](https://github.com/HuiwowICCSkills/gdufs-auth-session)；本 skill 不保存凭据，也不写会话文件。
 
 ## 1. 运行环境
 
@@ -30,7 +30,7 @@
 │   ├── agents/
 │   ├── references/
 │   └── scripts/
-└── gdufs-auth-session/     # 私有仓库，同样必需
+└── gdufs-auth-session/     # 公开仓库，同样必需
     ├── SKILL.md
     ├── run.ps1
     ├── requirements.txt
@@ -44,11 +44,11 @@ Codex 用户 `<skills-root>` 通常是 `%USERPROFILE%\.codex\skills`（macOS/Lin
 # HeinOnlineSearcher 仓库（若为私有，用有权限的账号克隆）
 git clone https://github.com/HuiwowICCSkills/HeinOnlineSearcher.git "$env:USERPROFILE\.codex\skills\HeinOnlineSearcher"
 
-# gdufs-auth-session 是私有仓库：先确认当前账号已有访问权限
+# gdufs-auth-session 是公开仓库：先确认当前账号已有访问权限
 git clone https://github.com/HuiwowICCSkills/gdufs-auth-session.git "$env:USERPROFILE\.codex\skills\gdufs-auth-session"
 ```
 
-私有仓库认不出凭据时，改用 SSH（`git@github.com:HuiwowICCSkills/gdufs-auth-session.git`）或在 Git Credential Manager 中登录有组织权限的账号。不想放同级目录时，设置环境变量即可：
+公开仓库认不出凭据时，改用 SSH（`git@github.com:HuiwowICCSkills/gdufs-auth-session.git`）或在 Git Credential Manager 中登录有组织权限的账号。不想放同级目录时，设置环境变量即可：
 
 ```powershell
 $env:GDUFS_AUTH_SKILL = 'D:\skills\gdufs-auth-session'
